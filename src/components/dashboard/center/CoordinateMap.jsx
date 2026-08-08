@@ -138,7 +138,7 @@ export function CoordinateMap({ faults, selectedFault, selectedId, onSelectFault
     selectedOverlayRef.current = new maps.CustomOverlay({
       position,
       xAnchor: 0.5,
-      yAnchor: 1.18,
+      yAnchor: 1.42,
       content: `
         <div class="kakao-fault-card">
           <span class="state ${selectedFault.status}">${escapeHtml(selectedFault.statusText)}</span>
@@ -151,7 +151,7 @@ export function CoordinateMap({ faults, selectedFault, selectedId, onSelectFault
 
     selectedOverlayRef.current.setMap(mapRef.current)
     mapRef.current.setLevel(selectedZoomLevel, { animate: true })
-    mapRef.current.panTo(position)
+    mapRef.current.setCenter(position)
   }, [isMapReady, selectedFault])
 
   useEffect(() => {
