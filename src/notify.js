@@ -1,4 +1,6 @@
-// 원본 FaultMon의 notify(title, message) 역할을 React toast 데이터로 변환하는 파일입니다.
+/**
+ * 260808 silee - FaultMon 알림 데이터 생성 함수
+ */
 export function createNotification(fault) {
   const now = new Date()
   const time = now.toLocaleTimeString('ko-KR', {

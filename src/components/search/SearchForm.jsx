@@ -1,15 +1,13 @@
-// FaultMon 대시보드의 기본 검색과 상세 기간/상태 필터를 제공하는 검색 폼 컴포넌트입니다.
 import { useState } from 'react'
 
-export function SearchForm({ filters, onChange, onReset }) {
+/**
+ * 260808 silee - FaultMon 검색 조건 표시 함수
+ */
+export function SearchForm({ filters, isLoading, onChange, onRefresh, onReset }) {
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false)
 
   return (
     <section className="search-panel" aria-label="fault search filters">
-      <div className="search-title">
-        <p className="meta-label">Fault Search</p>
-        <h2>실시간 고장 이벤트 필터</h2>
-      </div>
       <div className="search-controls">
         <label>
           <span>Keyword</span>
@@ -17,10 +15,13 @@ export function SearchForm({ filters, onChange, onReset }) {
             name="keyword"
             type="search"
             value={filters.keyword}
-            placeholder="장비명, 고장명, 접수번호"
+            placeholder="차량 번호, 고장명, 접수번호, 위치"
             onChange={onChange}
           />
         </label>
+        <button type="button" onClick={onRefresh} disabled={isLoading}>
+          {isLoading ? 'Loading' : 'Refresh'}
+        </button>
         <button type="button" onClick={onReset}>
           Reset
         </button>
@@ -31,27 +32,18 @@ export function SearchForm({ filters, onChange, onReset }) {
           aria-expanded={isAdvancedOpen}
           onClick={() => setIsAdvancedOpen((current) => !current)}
         >
-          <span className="advanced-chevron">{isAdvancedOpen ? '▲' : '▼'}</span>
+          <span className="advanced-chevron">{isAdvancedOpen ? '⌃' : '⌄'}</span>
         </button>
       </div>
 
       <div className={`advanced-shell ${isAdvancedOpen ? 'open' : ''}`}>
+        {/* 260808 silee - 상태와 기간 조건은 필요할 때만 열어 화면 높이를 아낍니다. */}
         <div className="advanced-controls">
-          <label>
-            <span>Severity</span>
-            <select name="severity" value={filters.severity} onChange={onChange}>
-              <option value="all">All</option>
-              <option value="critical">Critical</option>
-              <option value="warning">Warning</option>
-              <option value="minor">Minor</option>
-              <option value="normal">Normal</option>
-            </select>
-          </label>
           <label>
             <span>Status</span>
             <select name="status" value={filters.status} onChange={onChange}>
               <option value="all">All</option>
-              <option value="received">접수</option>
+              <option value="received">접수완료</option>
               <option value="dispatching">출동중</option>
               <option value="repairing">수리중</option>
               <option value="done">완료</option>

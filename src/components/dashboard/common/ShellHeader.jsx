@@ -1,11 +1,9 @@
-// 로고 없이 화면명, SignalR 연결 상태, 동기화 정보를 표현하는 상단 헤더 컴포넌트입니다.
+/**
+ * 260808 silee - 상단 연결 상태 표시 함수
+ */
 export function ShellHeader() {
   return (
     <header className="shell-header">
-      <div>
-        <p className="meta-label">Realtime Signal Monitor</p>
-        <h1>FaultMon Operations</h1>
-      </div>
       <div className="header-controls" aria-label="system status">
         <span className="connection-chip">
           <i></i>

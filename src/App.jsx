@@ -1,40 +1,38 @@
-// FaultMon 프론트엔드의 앱 루트로, 전역 실시간 알림과 현재 페이지를 조립하는 파일입니다.
-import { useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { ToastViewport } from './components/dashboard/common/ToastViewport'
-import { faults } from './data/faultData'
-import { createNotification } from './notify'
 import { SearchPage } from './pages/search/SearchPage'
 import './App.css'
 
+/**
+ * 260808 silee - FaultMon 화면 루트 컴포넌트
+ */
 function App() {
   const [toasts, setToasts] = useState([])
 
-  useEffect(() => {
-    const pushToast = () => {
-      const target = faults[Math.floor(Math.random() * faults.length)]
-      const toast = createNotification(target)
-
-      setToasts((current) => [toast, ...current].slice(0, 3))
-
-      window.setTimeout(() => {
-        setToasts((current) => current.filter((item) => item.id !== toast.id))
-      }, 4800)
-    }
-
-    pushToast()
-    const timer = window.setInterval(pushToast, 5000)
-
-    return () => window.clearInterval(timer)
+  const dismissToast = useCallback((toastId) => {
+    setToasts((current) => current.filter((toast) => toast.id !== toastId))
   }, [])
 
-  const dismissToast = (toastId) => {
-    setToasts((current) => current.filter((toast) => toast.id !== toastId))
-  }
+  const pushToast = useCallback(({ title, message, type = 'default' }) => {
+    // 260808 silee - 같은 위치에 알림이 계속 쌓이지 않도록 최근 3개만 유지합니다.
+    const toast = {
+      id: Date.now(),
+      title,
+      message,
+      type,
+    }
+
+    setToasts((current) => [toast, ...current].slice(0, 3))
+
+    window.setTimeout(() => {
+      setToasts((current) => current.filter((item) => item.id !== toast.id))
+    }, 4800)
+  }, [])
 
   return (
     <main className="dashboard-shell">
       <ToastViewport toasts={toasts} onDismiss={dismissToast} />
-      <SearchPage />
+      <SearchPage onNotify={pushToast} />
     </main>
   )
 }
