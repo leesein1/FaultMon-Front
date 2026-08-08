@@ -1,131 +1,162 @@
 # FaultMon Front
 
-FaultMon의 React 기반 실시간 고장 관제 프론트엔드입니다.
+FaultMon 실시간 고장 관제 화면을 React + Vite 기반으로 구성한 프론트 프로젝트입니다.
 
-이 프로젝트는 기존 ASP.NET MVC/jQuery 기반 FaultMon 화면을 React로 이관하기 위한 프론트엔드 작업 공간입니다. 현재는 실제 API 연동 전 단계의 UI 가안이며, SignalR 실시간 알림과 고장 관제 대시보드 구조를 보여주는 데 초점을 둡니다.
+기존 FaultMon .NET MVC 화면의 고장 목록, 상세, 지도, 알림 흐름을 `08.SeinServices.Api`의 FaultMon API와 연결해서 사용하는 구조입니다.
 
-## Tech Stack
+## 현재 상태
 
-| 항목 | 버전 |
-| --- | --- |
-| Node.js | v24.13.1 |
-| npm | 11.8.0 |
-| React | ^19.2.8 |
-| React DOM | ^19.2.8 |
-| Vite | ^8.2.0 |
-| @vitejs/plugin-react | ^6.0.4 |
-| Oxlint | ^1.75.0 |
+- `/` : 실시간 고장 관제 Home 화면
+- `/search` : FaultMon 고장 검색 화면
+- Kakao Map JavaScript SDK 기반 지도 표시
+- FaultMon API 목록/통계/상세 조회 연결
+- SignalR 연결 상태, 접속자 수, 알림 로그 표시
+- Search 화면에서는 SignalR 수신은 유지하되 목록 자동 갱신은 보류
+- `/search` 새로고침 시 같은 Search 화면 유지
+- Vercel SPA rewrite 설정 포함
 
-## UI Concept
-
-- 절제된 다크 모드 기반 B2B SaaS 관제 화면
-- 좌측: 금일 통계와 실시간 고장 데이터 테이블
-- 중앙: Dark/Muted 스타일 좌표 지도와 dot/ping 마커
-- 우측: 선택 고장 상세, 조치 현황, SignalR 이벤트 로그
-- 우측 상단: 실시간 고장 알림 toast
-- 검색 영역: 기본 검색 + 접히는 상세 검색
-
-## Current Features
-
-- 샘플 고장 데이터 기반 대시보드 렌더링
-- 고장 row 선택 시 지도/상세 정보 동기화
-- 고장 등급별 muted badge 표현
-- Critical 고장만 강한 red accent로 강조
-- 5초마다 실시간 알림 toast 데모
-- Keyword 검색
-- 상세 검색 접기/펼치기
-- Severity / Status 필터
-- From / To 날짜+시+분 기간 필터
-
-## Project Structure
-
-```txt
-src
-├─ App.jsx
-├─ App.css
-├─ index.css
-├─ main.jsx
-├─ notify.js
-├─ data
-│  └─ faultData.js
-├─ pages
-│  └─ search
-│     └─ SearchPage.jsx
-└─ components
-   ├─ dashboard
-   │  ├─ left
-   │  │  └─ LeftRail.jsx
-   │  ├─ center
-   │  │  └─ CoordinateMap.jsx
-   │  ├─ right
-   │  │  └─ RightRail.jsx
-   │  └─ common
-   │     ├─ PanelHeader.jsx
-   │     ├─ ShellHeader.jsx
-   │     └─ ToastViewport.jsx
-   └─ search
-      └─ SearchForm.jsx
-```
-
-## Key Files
-
-| 파일 | 역할 |
-| --- | --- |
-| `src/App.jsx` | 앱 루트, 전역 toast 알림, 현재 페이지 조립 |
-| `src/pages/search/SearchPage.jsx` | 검색 페이지, 필터 상태, 3단 대시보드 조립 |
-| `src/components/search/SearchForm.jsx` | 기본 검색 및 상세 검색 폼 |
-| `src/components/dashboard/left/LeftRail.jsx` | 좌측 통계 및 고장 데이터 테이블 |
-| `src/components/dashboard/center/CoordinateMap.jsx` | 중앙 좌표 지도 및 dot/ping 마커 |
-| `src/components/dashboard/right/RightRail.jsx` | 우측 상세 정보, 조치 현황, Signal 로그 |
-| `src/components/dashboard/common/ToastViewport.jsx` | 우측 상단 실시간 알림 toast |
-| `src/data/faultData.js` | UI 가안용 샘플 고장/SignalR 데이터 |
-| `src/notify.js` | 원본 `notify(title, message)` 역할의 toast 데이터 생성 |
-
-## Project Setup
+## 실행
 
 ```bash
 npm install
-```
-
-## Development
-
-```bash
 npm run dev
 ```
 
-기본 개발 서버 주소는 보통 아래 주소입니다.
+기본 개발 주소:
 
 ```txt
 http://localhost:5173
 ```
 
-## Build
+Search 화면:
+
+```txt
+http://localhost:5173/search
+```
+
+## 빌드와 검사
 
 ```bash
+npm run lint
 npm run build
 ```
 
-빌드 결과물은 `dist/` 폴더에 생성됩니다.
+## 환경변수
 
-## Preview
+`.env`는 로컬 전용으로 사용하고, Git에는 `.env.example`만 올립니다.
 
-```bash
-npm run preview
+```env
+VITE_KAKAO_MAP_JS_KEY=your-kakao-javascript-key
+VITE_API_BASE_URL=https://your-api-host
+VITE_SIGNALR_HUB_URL=https://your-api-host/hubs/faultmon
 ```
 
-## Scripts
+로컬 Docker API를 Vite proxy로 붙일 때는 아래처럼 둘 수 있습니다.
 
-| 명령어 | 설명 |
+```env
+VITE_API_BASE_URL=
+VITE_SIGNALR_HUB_URL=/hubs/faultmon
+```
+
+Vercel 배포 환경변수 예시:
+
+```env
+VITE_KAKAO_MAP_JS_KEY=카카오 JavaScript 키
+VITE_API_BASE_URL=https://api.silee.net
+VITE_SIGNALR_HUB_URL=https://api.silee.net/hubs/faultmon
+```
+
+## 화면 구조
+
+Home:
+
+- 좌측: 금일 통계, 실시간 고장 목록
+- 중앙: Kakao Map 고장 위치 마커
+- 우측: 선택 고장 상세, 조치 상태, Signal Log
+
+Search:
+
+- 좌측 위: 검색 조건 폼
+- 좌측 아래: Search Result 리스트
+- 우측 위: Kakao Map
+- 우측 아래: 선택 고장 상세
+
+## Search 조건
+
+Search 조건은 4줄로 구성합니다.
+
+- 1줄: 통합 검색
+- 2줄: 접수 번호, 차량 번호, 접수자, 담당자
+- 3줄: 상태 다중 선택
+- 4줄: 시간 시작, 시간 종료
+
+통합 검색 대상:
+
+- 차량 번호
+- 고장명
+- 고장 내용
+- 접수 번호
+- 접수자
+- 담당자
+- 담당 연락처
+- 출동 차량
+- 위치
+
+상태 조건:
+
+- 전체
+- 접수완료
+- 출동중
+- 수리중
+- 완료
+
+## SignalR 동작
+
+SignalR Hub:
+
+```txt
+/hubs/faultmon
+```
+
+수신 이벤트:
+
+- `FaultMonUserCount` : 현재 SignalR 접속자 수 표시
+- `Signal_FLTLIST` : Home 화면에서 FaultMon 목록 갱신 및 알림 표시
+- `FaultMonScheduleTick` : PROC_SCH_REPEAT_INSERT 실행 로그 표시
+- `FaultMonScheduleError` : 스케줄 실행 실패 로그 표시
+
+Search 화면에서는 `Signal_FLTLIST`를 받아도 목록을 자동 갱신하지 않고 Signal Log에 보류 로그만 남깁니다.
+
+## 샘플 데이터
+
+현재 `/search` 화면은 리스트 영역 확인을 위해 샘플 데이터 4건을 강제로 표시하는 상태입니다.
+
+샘플 데이터:
+
+- `F-260808-S001` / `269조5969` / 제동 거리 이상 / 접수완료
+- `F-260808-S002` / `183하7741` / 엔진 과열 / 출동중
+- `F-260808-S003` / `52마8014` / ABS 센서 이상 / 수리중
+- `F-260808-S004` / `77바2290` / 타이어 압력 저하 / 완료
+
+실제 API 데이터로 되돌릴 때는 `src/pages/search/SearchPage.jsx`의 `SearchWorkspace`에서 `isSampleMode`, `displayFaults` 부분을 실제 `filteredFaults` 기준으로 변경하면 됩니다.
+
+## 주요 파일
+
+| 파일 | 역할 |
 | --- | --- |
-| `npm run dev` | Vite 개발 서버 실행 |
-| `npm run build` | 프로덕션 빌드 생성 |
-| `npm run preview` | 빌드 결과 미리보기 |
-| `npm run lint` | Oxlint 실행 |
+| `src/App.jsx` | 전역 알림, URL 기반 Home/Search 화면 전환 |
+| `src/pages/search/SearchPage.jsx` | FaultMon 화면 상태, API 조회, SignalR 수신, Search/Home 화면 구성 |
+| `src/components/search/SearchForm.jsx` | 4줄 Search 조회 조건 폼 |
+| `src/components/dashboard/center/CoordinateMap.jsx` | Kakao Map 지도와 고장 마커 |
+| `src/components/dashboard/common/ShellHeader.jsx` | Home/Search 메뉴, SignalR 상태, 접속자 수, 알림 로그 |
+| `src/api/faultMonApi.js` | FaultMon API 호출과 DB row 화면 모델 변환 |
+| `src/api/faultMonSignalR.js` | FaultMon SignalR 연결 생성 |
+| `src/notify.js` | FaultMon 알림 문구와 중복 비교 키 생성 |
+| `vite.config.js` | 로컬 Docker API/Vite proxy 설정 |
+| `vercel.json` | Vercel SPA rewrite 설정 |
 
-## Next Steps
+## 배포 참고
 
-- SeinServices.Api의 Fault API 연동
-- SignalR Hub 실제 연결
-- 샘플 데이터 제거 및 API 응답 모델 정리
-- 실제 지도 라이브러리/타일 적용
-- 알림 toast를 실제 DB 변경 이벤트 기반으로 전환
+Vercel에서 `/search` 직접 접근 및 새로고침을 지원하기 위해 `vercel.json`에 모든 경로를 `index.html`로 rewrite하는 설정이 들어있습니다.
+
+Cloudflare/Vercel 도메인에서 API를 호출하려면 백엔드 CORS에 해당 프론트 도메인이 등록되어 있어야 합니다.
