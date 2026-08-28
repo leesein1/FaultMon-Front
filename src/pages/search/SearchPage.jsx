@@ -13,17 +13,21 @@ import { RightRail } from '../../components/dashboard/right/RightRail'
 import { SearchForm } from '../../components/search/SearchForm'
 import { createNotification, createNotificationKey } from '../../notify'
 
-const initialFilters = {
-  keyword: '',
-  vehicleNo: '',
-  receiptNo: '',
-  customer: '',
-  manager: '',
-  statuses: [],
-  dateTimeFrom: '',
-  dateTimeTo: '',
-  page: 1,
-  pageSize: 100,
+function createInitialFilters() {
+  const today = formatInputDate(new Date())
+
+  return {
+    keyword: '',
+    vehicleNo: '',
+    receiptNo: '',
+    customer: '',
+    manager: '',
+    statuses: [],
+    dateTimeFrom: today,
+    dateTimeTo: today,
+    page: 1,
+    pageSize: 100,
+  }
 }
 
 const emptyStats = {
@@ -46,7 +50,7 @@ export function SearchPage({
   onViewChange,
   onNotify,
 }) {
-  const [filters, setFilters] = useState(initialFilters)
+  const [filters, setFilters] = useState(() => createInitialFilters())
   const [faults, setFaults] = useState([])
   const [searchFaults, setSearchFaults] = useState([])
   const [searchTotalCount, setSearchTotalCount] = useState(0)
@@ -56,6 +60,7 @@ export function SearchPage({
   const [signalEvents, setSignalEvents] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSearchLoading, setIsSearchLoading] = useState(false)
+  const [isSearchLoadingMore, setIsSearchLoadingMore] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [searchErrorMessage, setSearchErrorMessage] = useState('')
@@ -64,6 +69,9 @@ export function SearchPage({
   const [signalUserCount, setSignalUserCount] = useState(0)
   const [lastSyncTime, setLastSyncTime] = useState('')
   const activeViewRef = useRef(activeView)
+  const didAutoSearchRef = useRef(false)
+  const isSearchLoadingMoreRef = useRef(false)
+  const nextSearchPageRef = useRef(2)
   const latestNotificationKeyRef = useRef('')
 
   const activeFaults = activeView === 'search' ? searchFaults : faults
@@ -328,29 +336,71 @@ export function SearchPage({
     setFilters((current) => ({ ...current, [name]: value, page: 1 }))
   }
 
-  const handleSearch = async () => {
+  const runSearch = useCallback(async (nextFilters, { append = false } = {}) => {
     // 260808 silee - Search 화면은 SignalR 갱신 대신 DB 누적 이력을 직접 조회합니다.
     setHasSearched(true)
-    setIsSearchLoading(true)
+    if (append) {
+      isSearchLoadingMoreRef.current = true
+      setIsSearchLoadingMore(true)
+    } else {
+      nextSearchPageRef.current = 2
+      setIsSearchLoading(true)
+    }
     setSearchErrorMessage('')
 
     try {
-      const result = await fetchFaultHistory(filters)
-      setSearchFaults(result.items)
+      const result = await fetchFaultHistory(nextFilters)
+      setFilters(nextFilters)
+      setSearchFaults((current) => append ? [...current, ...result.items] : result.items)
       setSearchTotalCount(result.totalCount)
-      setSelectedId(result.items[0]?.id ?? null)
+      if (!append) {
+        setSelectedId(result.items[0]?.id ?? null)
+      }
     } catch {
-      setSearchFaults([])
-      setSearchTotalCount(0)
-      setSelectedId(null)
-      setSearchErrorMessage('FaultMon 누적 이력 검색에 실패했습니다.')
+      if (!append) {
+        setSearchFaults([])
+        setSearchTotalCount(0)
+        setSelectedId(null)
+        setSearchErrorMessage('FaultMon 누적 이력 검색에 실패했습니다.')
+      } else {
+        nextSearchPageRef.current = nextFilters.page ?? nextSearchPageRef.current
+      }
     } finally {
-      setIsSearchLoading(false)
+      if (append) {
+        isSearchLoadingMoreRef.current = false
+        setIsSearchLoadingMore(false)
+      } else {
+        setIsSearchLoading(false)
+      }
     }
+  }, [])
+
+  const handleSearch = () => {
+    runSearch({ ...filters, page: 1 })
   }
 
+  const handleLoadMoreSearch = () => {
+    if (isSearchLoading || isSearchLoadingMoreRef.current || searchFaults.length >= searchTotalCount) {
+      return
+    }
+
+    const nextPage = nextSearchPageRef.current
+    nextSearchPageRef.current += 1
+    runSearch({ ...filters, page: nextPage }, { append: true })
+  }
+
+  useEffect(() => {
+    if (activeView !== 'search' || didAutoSearchRef.current) {
+      return
+    }
+
+    didAutoSearchRef.current = true
+    handleSearch()
+  }, [activeView])
+
   const resetFilters = () => {
-    setFilters(initialFilters)
+    nextSearchPageRef.current = 2
+    setFilters(createInitialFilters())
     setSearchFaults([])
     setSearchTotalCount(0)
     setHasSearched(false)
@@ -404,7 +454,9 @@ export function SearchPage({
           faults={searchFaults}
           filters={filters}
           hasSearched={hasSearched}
+          hasMore={searchFaults.length < searchTotalCount}
           isLoading={isSearchLoading}
+          isLoadingMore={isSearchLoadingMore}
           searchErrorMessage={searchErrorMessage}
           selectedFault={selectedFault}
           selectedId={selectedId}
@@ -412,6 +464,7 @@ export function SearchPage({
           onChange={handleFilterChange}
           onReset={resetFilters}
           onSearch={handleSearch}
+          onLoadMore={handleLoadMoreSearch}
           onSelectFault={handleSelectFault}
         />
       )}
@@ -426,7 +479,9 @@ function SearchWorkspace({
   faults,
   filters,
   hasSearched,
+  hasMore,
   isLoading,
+  isLoadingMore,
   searchErrorMessage,
   selectedId,
   selectedFault,
@@ -434,8 +489,12 @@ function SearchWorkspace({
   onChange,
   onReset,
   onSearch,
+  onLoadMore,
   onSelectFault,
 }) {
+  const selectedIndex = faults.findIndex((fault) => fault.id === selectedId)
+  const selectedPosition = selectedIndex >= 0 ? selectedIndex + 1 : null
+
   return (
     <section className="search-workspace">
       <div className="search-main-layout">
@@ -450,10 +509,13 @@ function SearchWorkspace({
           <SearchResultsPanel
             faults={faults}
             hasSearched={hasSearched}
+            hasMore={hasMore}
             isLoading={isLoading}
+            isLoadingMore={isLoadingMore}
             searchErrorMessage={searchErrorMessage}
             selectedId={selectedId}
             totalCount={totalCount}
+            onLoadMore={onLoadMore}
             onSelectFault={onSelectFault}
           />
         </div>
@@ -466,7 +528,11 @@ function SearchWorkspace({
               onSelectFault={onSelectFault}
             />
           </div>
-          <SearchDetailPanel selectedFault={selectedFault} />
+          <SearchDetailPanel
+            selectedFault={selectedFault}
+            selectedPosition={selectedPosition}
+            totalCount={totalCount}
+          />
         </div>
       </div>
     </section>
@@ -479,12 +545,28 @@ function SearchWorkspace({
 function SearchResultsPanel({
   faults,
   hasSearched,
+  hasMore,
   isLoading,
+  isLoadingMore,
   searchErrorMessage,
   selectedId,
   totalCount,
+  onLoadMore,
   onSelectFault,
 }) {
+  const handleScroll = (event) => {
+    if (!hasMore || isLoading || isLoadingMore) {
+      return
+    }
+
+    const element = event.currentTarget
+    const distanceToBottom = element.scrollHeight - element.scrollTop - element.clientHeight
+
+    if (distanceToBottom <= 80) {
+      onLoadMore?.()
+    }
+  }
+
   return (
     <section className="panel search-results-panel">
       <header className="panel-header search-summary-header">
@@ -497,7 +579,7 @@ function SearchResultsPanel({
         </span>
       </header>
 
-      <div className="search-results-wrap">
+      <div className="search-results-wrap" onScroll={handleScroll}>
         <table className="fault-table search-result-table">
           <thead>
             <tr>
@@ -562,6 +644,13 @@ function SearchResultsPanel({
                   <td>{fault.location}</td>
                 </tr>
               ))}
+            {!isLoading && !searchErrorMessage && isLoadingMore && (
+              <tr>
+                <td className="empty-table loading-more" colSpan="6">
+                  다음 100건 조회 중입니다.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -572,7 +661,7 @@ function SearchResultsPanel({
 /**
  * 260808 silee - FaultMon 검색 상세 정보 표시 함수
  */
-function SearchDetailPanel({ selectedFault }) {
+function SearchDetailPanel({ selectedFault, selectedPosition, totalCount }) {
   if (!selectedFault) {
     return (
       <section className="panel search-detail-panel">
@@ -590,6 +679,11 @@ function SearchDetailPanel({ selectedFault }) {
       <header className="panel-header">
         <h2>Search Detail</h2>
         <p>{selectedFault.receiptNo}</p>
+        {selectedPosition && (
+          <span className="selected-position-chip">
+            {selectedPosition}번째 / {totalCount}건
+          </span>
+        )}
       </header>
       <dl className="search-detail-list">
         <SearchDetailItem label="차량 번호" value={selectedFault.vehicleNo} />
@@ -629,4 +723,12 @@ function formatLogTime(value) {
     minute: '2-digit',
     second: '2-digit',
   })
+}
+
+function formatInputDate(value) {
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
 }

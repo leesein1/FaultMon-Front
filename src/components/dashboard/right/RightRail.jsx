@@ -52,8 +52,8 @@ export function RightRail({ selectedFault, signalEvents }) {
         <PanelHeader title="Signal Log" subtitle="refresh trace" />
         <div className="event-list">
           {signalEvents.length === 0 && <div className="empty-detail">아직 갱신 로그가 없습니다.</div>}
-          {signalEvents.map((event) => (
-            <div className="event-item" key={`${event.time}-${event.type}-${event.message}`}>
+          {signalEvents.map((event, index) => (
+            <div className="event-item" key={`${event.time}-${event.type}-${index}`}>
               <span>{event.time}</span>
               <strong>{event.type}</strong>
               <small>{event.message}</small>

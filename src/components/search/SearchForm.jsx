@@ -1,3 +1,8 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { DayPicker } from '@daypicker/react'
+import { ko } from '@daypicker/react/locale'
+import '@daypicker/react/style.css'
+
 const statusOptions = [
   { value: 'received', label: '접수완료' },
   { value: 'dispatching', label: '출동중' },
@@ -5,9 +10,6 @@ const statusOptions = [
   { value: 'done', label: '완료' },
 ]
 
-/**
- * 260808 silee - FaultMon 4줄 조회 조건 입력 폼 함수
- */
 export function SearchForm({ filters, isLoading, onChange, onSearch, onReset }) {
   return (
     <section className="search-panel" aria-label="fault search filters">
@@ -26,14 +28,13 @@ export function SearchForm({ filters, isLoading, onChange, onSearch, onReset }) 
         </div>
       </header>
 
-      {/* 260808 silee - 조건 영역은 업무 조회 화면처럼 4줄로 고정해서 한눈에 보이게 둡니다. */}
       <div className="condition-form">
         <ConditionInput
           className="condition-span-all"
           name="keyword"
           label="통합 검색"
           value={filters.keyword}
-          placeholder="차량, 고장명, 고장 내용, 접수 번호, 담당, 위치"
+          placeholder="차량, 고장명, 고장 내용, 접수 번호, 담당자, 위치"
           onChange={onChange}
         />
 
@@ -93,30 +94,16 @@ export function SearchForm({ filters, isLoading, onChange, onSearch, onReset }) 
           ))}
         </fieldset>
 
-        <div className="condition-row time-row">
-          <ConditionInput
-            name="dateTimeFrom"
-            label="시간 시작"
-            type="datetime-local"
-            value={filters.dateTimeFrom}
-            onChange={onChange}
-          />
-          <ConditionInput
-            name="dateTimeTo"
-            label="시간 종료"
-            type="datetime-local"
-            value={filters.dateTimeTo}
-            onChange={onChange}
-          />
-        </div>
+        <DateRangePicker
+          fromValue={filters.dateTimeFrom}
+          toValue={filters.dateTimeTo}
+          onChange={onChange}
+        />
       </div>
     </section>
   )
 }
 
-/**
- * 260808 silee - FaultMon 조회 조건 입력칸 표시 함수
- */
 function ConditionInput({ className = '', name, label, type = 'text', value, placeholder = '', onChange }) {
   return (
     <label className={className}>
@@ -130,4 +117,136 @@ function ConditionInput({ className = '', name, label, type = 'text', value, pla
       />
     </label>
   )
+}
+
+function DateRangePicker({ fromValue, toValue, onChange }) {
+  const [openPicker, setOpenPicker] = useState(null)
+  const pickerRef = useRef(null)
+  const selectedRange = useMemo(() => ({
+    from: parseLocalDate(fromValue),
+    to: parseLocalDate(toValue),
+  }), [fromValue, toValue])
+
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      if (!pickerRef.current?.contains(event.target)) {
+        setOpenPicker(null)
+      }
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setOpenPicker(null)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
+
+  const handleSelect = (date) => {
+    if (!date || !openPicker) {
+      return
+    }
+
+    emitDateChange(onChange, openPicker === 'from' ? 'dateTimeFrom' : 'dateTimeTo', formatLocalDate(date))
+
+    if (openPicker === 'from' && selectedRange.to && date > selectedRange.to) {
+      emitDateChange(onChange, 'dateTimeTo', '')
+    }
+
+    if (openPicker === 'to' && selectedRange.from && date < selectedRange.from) {
+      emitDateChange(onChange, 'dateTimeFrom', '')
+    }
+
+    setOpenPicker(null)
+  }
+
+  return (
+    <div className="condition-row time-row" ref={pickerRef}>
+      <span className="time-row-title">발생 시간</span>
+      <div className="date-range-controls">
+        <button
+          className="date-range-button"
+          type="button"
+          aria-expanded={openPicker === 'from'}
+          onClick={() => setOpenPicker((current) => current === 'from' ? null : 'from')}
+        >
+          {formatDisplayDate(selectedRange.from)}
+        </button>
+        <span className="date-range-separator">~</span>
+        <button
+          className="date-range-button"
+          type="button"
+          aria-expanded={openPicker === 'to'}
+          onClick={() => setOpenPicker((current) => current === 'to' ? null : 'to')}
+        >
+          {formatDisplayDate(selectedRange.to)}
+        </button>
+      </div>
+
+      {openPicker && (
+        <div className="date-picker-popover">
+          <DayPicker
+            animate
+            mode="single"
+            locale={ko}
+            selected={openPicker === 'from' ? selectedRange.from : selectedRange.to}
+            onSelect={handleSelect}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function emitDateChange(onChange, name, value) {
+  onChange({
+    target: {
+      name,
+      value,
+    },
+  })
+}
+
+function parseLocalDate(value) {
+  if (!value) {
+    return undefined
+  }
+
+  const [year, month, day] = String(value).split('-').map(Number)
+  if (!year || !month || !day) {
+    return undefined
+  }
+
+  return new Date(year, month - 1, day)
+}
+
+function formatLocalDate(value) {
+  if (!value) {
+    return ''
+  }
+
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
+function formatDisplayDate(value) {
+  if (!value) {
+    return '날짜 선택'
+  }
+
+  return value.toLocaleDateString('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
 }

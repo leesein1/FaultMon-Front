@@ -82,8 +82,8 @@ function buildFaultHistoryQuery(filters) {
   appendParam(params, 'customerName', filters.customer)
   appendParam(params, 'mangerName', filters.manager)
   appendParam(params, 'statuses', statuses.join(','))
-  appendParam(params, 'setTimeFrom', filters.dateTimeFrom)
-  appendParam(params, 'setTimeTo', filters.dateTimeTo)
+  appendParam(params, 'setTimeFrom', formatSetTimeFilter(filters.dateTimeFrom, 'from'))
+  appendParam(params, 'setTimeTo', formatSetTimeFilter(filters.dateTimeTo, 'to'))
   appendParam(params, 'page', filters.page ?? 1)
   appendParam(params, 'pageSize', filters.pageSize ?? 100)
 
@@ -99,6 +99,23 @@ function appendParam(params, key, value) {
   }
 
   params.set(key, value)
+}
+
+function formatSetTimeFilter(value, boundary) {
+  if (!value) {
+    return ''
+  }
+
+  const normalized = String(value).trim().replace('T', ' ')
+  const [datePart, timePart = ''] = normalized.split(' ')
+  if (!timePart) {
+    return boundary === 'to' ? `${datePart} 23:59:59` : `${datePart} 00:00:00`
+  }
+
+  const [hour = '00', minute = '00', second] = timePart.split(':')
+  const defaultSecond = boundary === 'to' ? '59' : '00'
+
+  return `${datePart} ${hour.padStart(2, '0')}:${minute.padStart(2, '0')}:${(second ?? defaultSecond).padStart(2, '0')}`
 }
 
 /**
