@@ -1,11 +1,23 @@
 # FaultMon Front
 
-FaultMon 차량 고장 관제 화면을 React + Vite로 다시 구성한 프론트 프로젝트입니다.
+차량 고장 관제 화면을 React + Vite로 다시 구성한 FaultMon V2 프론트입니다.
 
-기존 .NET MVC 버전에서 화면과 API가 한 프로젝트에 있던 구조를 분리했고, 현재는 `08.SeinServices.Api`의 FaultMon API와 SignalR Hub를 사용합니다.
+V1은 .NET MVC 프로젝트 안에 화면과 서버 로직이 함께 있었습니다. V2에서는 React 프론트와 ASP.NET Core API를 분리했고, 고장 조회와 실시간 처리는 `08.SeinServices.Api`를 사용합니다.
+
+실무에서 접했던 관제 시스템을 개인적으로 다시 구현한 V1을 기반으로, 구조를 나누고 검색 기능을 추가하면서 현재 형태로 개편했습니다.
 
 - V1: [FaultMon](https://github.com/leesein1/FaultMon)
 - API: [08.SeinServices.Api](https://github.com/leesein1/08.SeinServices.Api)
+
+---
+
+## V1에서 바꾼 부분
+
+- MVC 통합 구조 → React 프론트 / ASP.NET Core API 분리
+- Leaflet 지도 → Kakao Map JavaScript SDK
+- DB 변경 감지 중심 구조 → API + SignalR Hub 연결
+- 최근 고장 관제 화면에 누적 고장 이력 Search 화면 추가
+- Vercel SPA 배포 구조 적용
 
 ---
 
@@ -27,21 +39,36 @@ FaultMon 차량 고장 관제 화면을 React + Vite로 다시 구성한 프론�
 - 시작/종료 시간 조건
 - 검색 결과 지도 표시와 상세 조회
 
-`/search`는 SignalR 이벤트를 받아도 검색 결과를 자동 갱신하지 않습니다. 현재 검색 조건으로 조회한 결과를 유지하고 이벤트만 로그에 남깁니다.
+`/search`는 SignalR 이벤트를 받아도 현재 검색 결과를 자동 갱신하지 않습니다. 검색 조건으로 조회한 결과는 유지하고 이벤트만 로그에 남깁니다.
 
 ---
 
-## 기술
+## 구조
 
-`React` `Vite` `Kakao Map JavaScript SDK` `SignalR`
+```text
+FaultMon Front
+  ├─ Home
+  ├─ Search
+  ├─ Kakao Map
+  └─ SignalR Client
+       │
+       ├─ REST API
+       └─ /hubs/faultmon
+       │
+       ▼
+SeinServices.Api
+       │
+       ▼
+     MSSQL
+```
 
-API 서버는 ASP.NET Core 기반 `SeinServices.Api`를 사용합니다.
+기술은 `React`, `Vite`, `Kakao Map JavaScript SDK`, `SignalR`을 사용합니다.
 
 ---
 
 ## API / SignalR
 
-Home에서 사용하는 API:
+Home:
 
 ```text
 GET /Fault/GetFaultList
@@ -49,25 +76,10 @@ GET /Fault/GetStatToday
 GET /Fault/GetFaultListDetail?IncidentID={id}
 ```
 
-누적 이력 검색:
+Search:
 
 ```text
 GET /api/faultmon/faults/search
-```
-
-검색 파라미터:
-
-```text
-keyword
-receiptNo
-vehicleNo
-customerName
-mangerName
-statuses
-setTimeFrom
-setTimeTo
-page
-pageSize
 ```
 
 SignalR Hub:
@@ -83,9 +95,24 @@ SignalR Hub:
 - `FaultMonScheduleTick`
 - `FaultMonScheduleError`
 
----
+<details>
+<summary><b>Search query / 주요 파일</b></summary>
+<br/>
 
-## 주요 파일
+Search query:
+
+```text
+keyword
+receiptNo
+vehicleNo
+customerName
+mangerName
+statuses
+setTimeFrom
+setTimeTo
+page
+pageSize
+```
 
 | 파일 | 역할 |
 | --- | --- |
@@ -96,8 +123,8 @@ SignalR Hub:
 | `src/components/dashboard/common/ShellHeader.jsx` | 메뉴, SignalR 상태, 접속자 수 |
 | `src/api/faultMonApi.js` | API 호출 및 화면 데이터 변환 |
 | `src/api/faultMonSignalR.js` | SignalR 연결 생성 |
-| `vite.config.js` | 로컬 API proxy |
-| `vercel.json` | SPA rewrite |
+
+</details>
 
 ---
 
@@ -106,14 +133,11 @@ SignalR Hub:
 ```bash
 npm install
 npm run dev
-```
-
-```bash
 npm run lint
 npm run build
 ```
 
-환경변수 예시:
+환경변수:
 
 ```env
 VITE_KAKAO_MAP_JS_KEY=your-kakao-javascript-key
