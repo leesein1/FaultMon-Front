@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchFaultDetail, fetchFaultList, fetchTodayStats } from '../../api/faultMonApi'
+import {
+  fetchFaultDetail,
+  fetchFaultHistory,
+  fetchFaultList,
+  fetchTodayStats,
+} from '../../api/faultMonApi'
 import { createFaultMonConnection } from '../../api/faultMonSignalR'
 import { CoordinateMap } from '../../components/dashboard/center/CoordinateMap'
 import { ShellHeader } from '../../components/dashboard/common/ShellHeader'
@@ -17,6 +22,8 @@ const initialFilters = {
   statuses: [],
   dateTimeFrom: '',
   dateTimeTo: '',
+  page: 1,
+  pageSize: 100,
 }
 
 const emptyStats = {
@@ -27,112 +34,6 @@ const emptyStats = {
 }
 
 const pageSize = 10
-const sampleSearchFaults = [
-  {
-    id: -9001,
-    incidentId: -9001,
-    occurredDate: '2026. 08. 08.',
-    occurredAt: '13:12:04',
-    occurredAtIso: '2026-08-08T13:12',
-    assignedAt: '2026. 08. 08. 13:15:20',
-    assignedAtIso: '2026-08-08T13:15',
-    endedAt: '-',
-    endedAtIso: '',
-    receiptNo: 'F-260808-S001',
-    equipment: '269조5969',
-    vehicleNo: '269조5969',
-    dispatchVehicle: '출동 차량 3',
-    faultName: '제동 거리 이상',
-    faultText: '제동 반응 지연 경고가 감지되었습니다.',
-    status: 'received',
-    statusText: '접수완료',
-    customer: '사고자87',
-    manager: '출동기사2',
-    managerPhone: '010-0000-0001',
-    location: '용산 인근',
-    latitude: 37.5297,
-    longitude: 126.9644,
-    actions: ['제동 계통 점검', '현장 안전 확보', '정비소 이동 여부 확인'],
-  },
-  {
-    id: -9002,
-    incidentId: -9002,
-    occurredDate: '2026. 08. 08.',
-    occurredAt: '13:08:41',
-    occurredAtIso: '2026-08-08T13:08',
-    assignedAt: '2026. 08. 08. 13:11:03',
-    assignedAtIso: '2026-08-08T13:11',
-    endedAt: '-',
-    endedAtIso: '',
-    receiptNo: 'F-260808-S002',
-    equipment: '183하7741',
-    vehicleNo: '183하7741',
-    dispatchVehicle: '출동 차량 5',
-    faultName: '엔진 과열',
-    faultText: '냉각수 온도 상승으로 즉시 확인이 필요합니다.',
-    status: 'dispatching',
-    statusText: '출동중',
-    customer: '접수자12',
-    manager: '출동기사5',
-    managerPhone: '010-0000-0002',
-    location: '광천 인근',
-    latitude: 37.5312,
-    longitude: 126.9678,
-    actions: ['냉각수 확인', '엔진룸 열 식힘', '운행 중지 안내'],
-  },
-  {
-    id: -9003,
-    incidentId: -9003,
-    occurredDate: '2026. 08. 08.',
-    occurredAt: '13:03:28',
-    occurredAtIso: '2026-08-08T13:03',
-    assignedAt: '2026. 08. 08. 13:05:12',
-    assignedAtIso: '2026-08-08T13:05',
-    endedAt: '-',
-    endedAtIso: '',
-    receiptNo: 'F-260808-S003',
-    equipment: '52마8014',
-    vehicleNo: '52마8014',
-    dispatchVehicle: '출동 차량 1',
-    faultName: 'ABS 센서 이상',
-    faultText: 'ABS 센서 통신 이상 신호가 수신되었습니다.',
-    status: 'repairing',
-    statusText: '수리중',
-    customer: '접수자31',
-    manager: '정비담당1',
-    managerPhone: '010-0000-0003',
-    location: '서울역 인근',
-    latitude: 37.5547,
-    longitude: 126.9707,
-    actions: ['진단기 연결', '휠 센서 확인', '이상 코드 초기화'],
-  },
-  {
-    id: -9004,
-    incidentId: -9004,
-    occurredDate: '2026. 08. 08.',
-    occurredAt: '12:58:10',
-    occurredAtIso: '2026-08-08T12:58',
-    assignedAt: '2026. 08. 08. 13:00:22',
-    assignedAtIso: '2026-08-08T13:00',
-    endedAt: '2026. 08. 08. 13:24:19',
-    endedAtIso: '2026-08-08T13:24',
-    receiptNo: 'F-260808-S004',
-    equipment: '77바2290',
-    vehicleNo: '77바2290',
-    dispatchVehicle: '출동 차량 7',
-    faultName: '타이어 압력 저하',
-    faultText: '우측 후륜 압력 저하가 확인되었습니다.',
-    status: 'done',
-    statusText: '완료',
-    customer: '접수자04',
-    manager: '출동기사7',
-    managerPhone: '010-0000-0004',
-    location: '공덕 인근',
-    latitude: 37.5435,
-    longitude: 126.9511,
-    actions: ['타이어 압력 보충', '누기 여부 확인', '조치 완료 등록'],
-  },
-]
 
 /**
  * 260808 silee - FaultMon 메인 화면 제어 함수
@@ -146,14 +47,18 @@ export function SearchPage({
   onNotify,
 }) {
   const [filters, setFilters] = useState(initialFilters)
-  const [appliedFilters, setAppliedFilters] = useState(initialFilters)
   const [faults, setFaults] = useState([])
+  const [searchFaults, setSearchFaults] = useState([])
+  const [searchTotalCount, setSearchTotalCount] = useState(0)
   const [todayStats, setTodayStats] = useState(emptyStats)
   const [selectedId, setSelectedId] = useState(null)
   const [selectedDetail, setSelectedDetail] = useState(null)
   const [signalEvents, setSignalEvents] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isSearchLoading, setIsSearchLoading] = useState(false)
+  const [hasSearched, setHasSearched] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [searchErrorMessage, setSearchErrorMessage] = useState('')
   const [visibleCount, setVisibleCount] = useState(pageSize)
   const [signalStatus, setSignalStatus] = useState('connecting')
   const [signalUserCount, setSignalUserCount] = useState(0)
@@ -161,7 +66,7 @@ export function SearchPage({
   const activeViewRef = useRef(activeView)
   const latestNotificationKeyRef = useRef('')
 
-  const filteredFaults = useMemo(() => filterFaults(faults, appliedFilters), [faults, appliedFilters])
+  const activeFaults = activeView === 'search' ? searchFaults : faults
   const homeVisibleFaults = useMemo(() => faults.slice(0, visibleCount), [faults, visibleCount])
   const selectedFault = useMemo(() => {
     if (selectedId == null) {
@@ -172,13 +77,13 @@ export function SearchPage({
       return selectedDetail
     }
 
-    return faults.find((fault) => fault.id === selectedId) ?? null
-  }, [faults, selectedDetail, selectedId])
+    return activeFaults.find((fault) => fault.id === selectedId) ?? null
+  }, [activeFaults, selectedDetail, selectedId])
   const homeHasMoreFaults = visibleCount < faults.length
   const homeSelectedIndex = faults.findIndex((fault) => fault.id === selectedFault?.id)
 
   const refreshDashboard = useCallback(async ({ notify = true, logType = 'API', showLoading = true } = {}) => {
-    // 260808 silee - 새로고침 때 목록과 금일 통계를 함께 갱신합니다.
+    // 260808 silee - 홈 화면 최근 목록과 금일 통계를 함께 갱신합니다.
     if (showLoading) {
       setIsLoading(true)
     }
@@ -193,12 +98,12 @@ export function SearchPage({
       setLastSyncTime(now)
       setSignalEvents((current) =>
         [
-          { time: now, type: logType, message: '고장 목록과 금일 통계를 갱신했습니다.' },
+          { time: now, type: logType, message: '최근 고장 목록과 금일 통계를 갱신했습니다.' },
           ...current,
         ].slice(0, 8),
       )
 
-      if (faultList.length > 0) {
+      if (faultList.length > 0 && activeViewRef.current === 'home') {
         setSelectedId((current) => current ?? faultList[0].id)
         latestNotificationKeyRef.current ||= createNotificationKey(faultList[0])
       }
@@ -255,7 +160,7 @@ export function SearchPage({
         const now = formatLogTime(new Date())
         setSignalEvents((current) =>
           [
-            { time: now, type: 'SignalR', message: '검색 화면에서는 자동 갱신을 보류했습니다.' },
+            { time: now, type: 'SignalR', message: 'Search 화면에서는 누적 이력 결과를 자동 갱신하지 않습니다.' },
             ...current,
           ].slice(0, 8),
         )
@@ -351,18 +256,22 @@ export function SearchPage({
   }, [onNotify, refreshDashboard])
 
   useEffect(() => {
-    // 260808 silee - 홈 목록은 항상 10건부터 다시 확인하도록 초기화합니다.
+    // 260808 silee - 홈 목록은 항상 처음 10건부터 다시 확인합니다.
     setVisibleCount(pageSize)
-  }, [filters])
+  }, [faults])
 
   useEffect(() => {
+    if (activeView !== 'home') {
+      return
+    }
+
     if (selectedId != null && faults.length > 0 && !faults.some((fault) => fault.id === selectedId)) {
       setSelectedId(faults[0].id)
     }
-  }, [faults, selectedId])
+  }, [activeView, faults, selectedId])
 
   useEffect(() => {
-    if (!selectedId) {
+    if (!selectedId || selectedId < 1) {
       setSelectedDetail(null)
       return
     }
@@ -401,13 +310,14 @@ export function SearchPage({
     const { checked, name, value } = event.target
 
     if (name === 'statusesAll') {
-      setFilters((current) => ({ ...current, statuses: [] }))
+      setFilters((current) => ({ ...current, statuses: [], page: 1 }))
       return
     }
 
     if (name === 'statuses') {
       setFilters((current) => ({
         ...current,
+        page: 1,
         statuses: checked
           ? [...current.statuses, value]
           : current.statuses.filter((status) => status !== value),
@@ -415,20 +325,37 @@ export function SearchPage({
       return
     }
 
-    setFilters((current) => ({ ...current, [name]: value }))
+    setFilters((current) => ({ ...current, [name]: value, page: 1 }))
   }
 
-  const handleSearch = () => {
-    const matchedFaults = filterFaults(faults, filters)
-    setAppliedFilters(filters)
-    setSelectedId(matchedFaults[0]?.id ?? null)
+  const handleSearch = async () => {
+    // 260808 silee - Search 화면은 SignalR 갱신 대신 DB 누적 이력을 직접 조회합니다.
+    setHasSearched(true)
+    setIsSearchLoading(true)
+    setSearchErrorMessage('')
+
+    try {
+      const result = await fetchFaultHistory(filters)
+      setSearchFaults(result.items)
+      setSearchTotalCount(result.totalCount)
+      setSelectedId(result.items[0]?.id ?? null)
+    } catch {
+      setSearchFaults([])
+      setSearchTotalCount(0)
+      setSelectedId(null)
+      setSearchErrorMessage('FaultMon 누적 이력 검색에 실패했습니다.')
+    } finally {
+      setIsSearchLoading(false)
+    }
   }
 
   const resetFilters = () => {
     setFilters(initialFilters)
-    setAppliedFilters(initialFilters)
-    setSelectedId(faults[0]?.id ?? null)
-    setVisibleCount(pageSize)
+    setSearchFaults([])
+    setSearchTotalCount(0)
+    setHasSearched(false)
+    setSearchErrorMessage('')
+    setSelectedId(activeViewRef.current === 'home' ? faults[0]?.id ?? null : null)
   }
 
   const handleSelectFault = (faultId) => {
@@ -474,12 +401,14 @@ export function SearchPage({
         </section>
       ) : (
         <SearchWorkspace
-          filteredFaults={filteredFaults}
+          faults={searchFaults}
           filters={filters}
-          isLoading={isLoading}
+          hasSearched={hasSearched}
+          isLoading={isSearchLoading}
+          searchErrorMessage={searchErrorMessage}
           selectedFault={selectedFault}
           selectedId={selectedId}
-          totalCount={faults.length}
+          totalCount={searchTotalCount}
           onChange={handleFilterChange}
           onReset={resetFilters}
           onSearch={handleSearch}
@@ -494,22 +423,19 @@ export function SearchPage({
  * 260808 silee - FaultMon 검색 화면 구성 함수
  */
 function SearchWorkspace({
+  faults,
   filters,
+  hasSearched,
   isLoading,
-  filteredFaults: _filteredFaults,
-  totalCount,
+  searchErrorMessage,
   selectedId,
   selectedFault,
+  totalCount,
   onChange,
   onReset,
   onSearch,
   onSelectFault,
 }) {
-  const isSampleMode = true
-  const displayFaults = sampleSearchFaults
-  const displaySelectedFault =
-    selectedFault ?? displayFaults.find((fault) => fault.id === selectedId) ?? null
-
   return (
     <section className="search-workspace">
       <div className="search-main-layout">
@@ -522,24 +448,25 @@ function SearchWorkspace({
             onSearch={onSearch}
           />
           <SearchResultsPanel
-            faults={displayFaults}
-            isSampleMode={isSampleMode}
+            faults={faults}
+            hasSearched={hasSearched}
             isLoading={isLoading}
+            searchErrorMessage={searchErrorMessage}
             selectedId={selectedId}
-            totalCount={isSampleMode ? displayFaults.length : totalCount}
+            totalCount={totalCount}
             onSelectFault={onSelectFault}
           />
         </div>
         <div className="search-right-column">
           <div className="search-map-slot">
             <CoordinateMap
-              faults={displayFaults}
-              selectedFault={displaySelectedFault}
+              faults={faults}
+              selectedFault={selectedFault}
               selectedId={selectedId}
               onSelectFault={onSelectFault}
             />
           </div>
-          <SearchDetailPanel selectedFault={displaySelectedFault} />
+          <SearchDetailPanel selectedFault={selectedFault} />
         </div>
       </div>
     </section>
@@ -549,13 +476,21 @@ function SearchWorkspace({
 /**
  * 260808 silee - FaultMon 검색 결과 테이블 표시 함수
  */
-function SearchResultsPanel({ faults, isSampleMode, isLoading, selectedId, totalCount, onSelectFault }) {
+function SearchResultsPanel({
+  faults,
+  hasSearched,
+  isLoading,
+  searchErrorMessage,
+  selectedId,
+  totalCount,
+  onSelectFault,
+}) {
   return (
-    <section className={`panel search-results-panel ${isSampleMode ? 'sample-mode' : ''}`}>
+    <section className="panel search-results-panel">
       <header className="panel-header search-summary-header">
         <div>
           <h2>Search Result</h2>
-          <p>검색 버튼으로 적용된 FaultMon 결과</p>
+          <p>Search 버튼으로 조회한 누적 고장 이력</p>
         </div>
         <span>
           {faults.length} / {totalCount}건
@@ -578,18 +513,33 @@ function SearchResultsPanel({ faults, isSampleMode, isLoading, selectedId, total
             {isLoading && (
               <tr>
                 <td className="empty-table" colSpan="6">
-                  FaultMon 데이터를 불러오는 중입니다.
+                  누적 고장 이력을 조회하는 중입니다.
                 </td>
               </tr>
             )}
-            {!isLoading && faults.length === 0 && (
+            {!isLoading && searchErrorMessage && (
               <tr>
                 <td className="empty-table" colSpan="6">
-                  검색 조건에 맞는 고장 이벤트가 없습니다.
+                  {searchErrorMessage}
+                </td>
+              </tr>
+            )}
+            {!isLoading && !searchErrorMessage && !hasSearched && (
+              <tr>
+                <td className="empty-table" colSpan="6">
+                  조건을 입력하고 Search 버튼을 눌러주세요.
+                </td>
+              </tr>
+            )}
+            {!isLoading && !searchErrorMessage && hasSearched && faults.length === 0 && (
+              <tr>
+                <td className="empty-table" colSpan="6">
+                  검색 조건에 맞는 고장 이력이 없습니다.
                 </td>
               </tr>
             )}
             {!isLoading &&
+              !searchErrorMessage &&
               faults.map((fault) => (
                 <tr
                   className={fault.id === selectedId ? 'selected' : ''}
@@ -630,7 +580,7 @@ function SearchDetailPanel({ selectedFault }) {
           <h2>Search Detail</h2>
           <p>no selection</p>
         </header>
-        <div className="empty-detail">검색 결과에서 고장 이벤트를 선택해주세요.</div>
+        <div className="empty-detail">검색 결과에서 고장 이력을 선택해주세요.</div>
       </section>
     )
   }
@@ -644,6 +594,7 @@ function SearchDetailPanel({ selectedFault }) {
       <dl className="search-detail-list">
         <SearchDetailItem label="차량 번호" value={selectedFault.vehicleNo} />
         <SearchDetailItem label="고장명" value={selectedFault.faultName} />
+        <SearchDetailItem label="고장 내용" value={selectedFault.faultText} />
         <SearchDetailItem label="접수자" value={selectedFault.customer} />
         <SearchDetailItem label="담당자" value={selectedFault.manager} />
         <SearchDetailItem label="담당자 연락처" value={selectedFault.managerPhone} />
@@ -666,62 +617,6 @@ function SearchDetailItem({ label, value }) {
       <dd>{value || '-'}</dd>
     </div>
   )
-}
-
-/**
- * 260808 silee - FaultMon 목록 필터 함수
- */
-function filterFaults(source, filters) {
-  const keyword = filters.keyword.trim().toLowerCase()
-
-  return source.filter((fault) => {
-    const keywordMatched =
-      !keyword ||
-      lowerText(fault.equipment).includes(keyword) ||
-      lowerText(fault.vehicleNo).includes(keyword) ||
-      lowerText(fault.faultName).includes(keyword) ||
-      lowerText(fault.receiptNo).includes(keyword) ||
-      lowerText(fault.location).includes(keyword) ||
-      lowerText(fault.customer).includes(keyword) ||
-      lowerText(fault.manager).includes(keyword) ||
-      lowerText(fault.managerPhone).includes(keyword) ||
-      lowerText(fault.dispatchVehicle).includes(keyword) ||
-      lowerText(fault.faultText).includes(keyword)
-    const statusMatched = filters.statuses.length === 0 || filters.statuses.includes(fault.status)
-    const dateFromMatched = !filters.dateTimeFrom || fault.occurredAtIso >= filters.dateTimeFrom
-    const dateToMatched = !filters.dateTimeTo || fault.occurredAtIso <= filters.dateTimeTo
-
-    return (
-      keywordMatched &&
-      statusMatched &&
-      dateFromMatched &&
-      dateToMatched &&
-      containsText(fault.vehicleNo, filters.vehicleNo) &&
-      containsText(fault.receiptNo, filters.receiptNo) &&
-      containsText(fault.customer, filters.customer) &&
-      containsText(fault.manager, filters.manager)
-    )
-  })
-}
-
-/**
- * 260808 silee - 상세 검색어 포함 여부 확인 함수
- */
-function containsText(source, keyword) {
-  const normalizedKeyword = String(keyword ?? '').trim().toLowerCase()
-
-  if (!normalizedKeyword) {
-    return true
-  }
-
-  return lowerText(source).includes(normalizedKeyword)
-}
-
-/**
- * 260808 silee - 검색 비교용 소문자 변환 함수
- */
-function lowerText(value) {
-  return String(value ?? '').toLowerCase()
 }
 
 /**

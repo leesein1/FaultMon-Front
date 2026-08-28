@@ -1,11 +1,23 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
 /**
- * 260808 silee - FaultMon 고장 목록 조회 함수
+ * 260808 silee - FaultMon 최근 고장 목록 조회 함수
  */
 export async function fetchFaultList() {
   const rows = await requestJson('/Fault/GetFaultList')
   return rows.map(mapFaultRow)
+}
+
+/**
+ * 260808 silee - FaultMon 누적 고장 이력 검색 함수
+ */
+export async function fetchFaultHistory(filters) {
+  const rows = await requestJson(`/api/faultmon/faults/search?${buildFaultHistoryQuery(filters)}`)
+
+  return {
+    items: rows.map(mapFaultRow),
+    totalCount: numberOrZero(rows[0]?.TotalCount),
+  }
 }
 
 /**
@@ -43,7 +55,7 @@ export async function fetchFaultDetailPop(incidentId) {
  * 260808 silee - FaultMon API 공통 JSON 요청 함수
  */
 async function requestJson(path) {
-  // 260808 silee - 로컬 개발은 Vite proxy, 배포는 VITE_API_BASE_URL 기준으로 호출합니다.
+  // 260808 silee - 로컬은 Vite proxy, 배포는 VITE_API_BASE_URL 기준으로 호출합니다.
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
       Accept: 'application/json',
@@ -58,10 +70,65 @@ async function requestJson(path) {
 }
 
 /**
+ * 260808 silee - FaultMon 검색 조건 query string 생성 함수
+ */
+function buildFaultHistoryQuery(filters) {
+  const params = new URLSearchParams()
+  const statuses = (filters.statuses ?? []).map(mapStatusValue).filter(Boolean)
+
+  appendParam(params, 'keyword', filters.keyword)
+  appendParam(params, 'receiptNo', filters.receiptNo)
+  appendParam(params, 'vehicleNo', filters.vehicleNo)
+  appendParam(params, 'customerName', filters.customer)
+  appendParam(params, 'mangerName', filters.manager)
+  appendParam(params, 'statuses', statuses.join(','))
+  appendParam(params, 'setTimeFrom', filters.dateTimeFrom)
+  appendParam(params, 'setTimeTo', filters.dateTimeTo)
+  appendParam(params, 'page', filters.page ?? 1)
+  appendParam(params, 'pageSize', filters.pageSize ?? 100)
+
+  return params.toString()
+}
+
+/**
+ * 260808 silee - 빈 검색 조건 제외 함수
+ */
+function appendParam(params, key, value) {
+  if (value == null || value === '') {
+    return
+  }
+
+  params.set(key, value)
+}
+
+/**
+ * 260808 silee - 화면 상태값을 DB Stat 값으로 변환 함수
+ */
+function mapStatusValue(status) {
+  if (status === 'received') {
+    return '0'
+  }
+
+  if (status === 'dispatching') {
+    return '1'
+  }
+
+  if (status === 'repairing') {
+    return '2'
+  }
+
+  if (status === 'done') {
+    return '3'
+  }
+
+  return ''
+}
+
+/**
  * 260808 silee - DB row 화면 데이터 변환 함수
  */
 function mapFaultRow(row) {
-  // 260808 silee - DB 컬럼명을 화면에서 쓰기 편한 이름으로 한 번 정리합니다.
+  // 260808 silee - DB 컬럼명을 화면에서 쓰기 편한 이름으로 정리합니다.
   const occurredAt = parseDate(row.SetTime)
   const assignedAt = parseDate(row.AssignedTime)
   const endedAt = parseDate(row.EndTime)
@@ -88,7 +155,7 @@ function mapFaultRow(row) {
     manager: text(row.MangerName, row.MangerID ? `Manager ${row.MangerID}` : '-'),
     managerPhone: text(row.MangerPhone, '-'),
     customer: text(row.CustomerName, '-'),
-    vehicleNo: text(row.C_ViheicleLicense, '-'),
+    vehicleNo: text(row.C_ViheicleLicense, row.VehicleLicense ?? '-'),
     dispatchVehicle: text(row.VehicleLicense, row.VehicleID ? `출동 차량 ${row.VehicleID}` : '-'),
     location: text(row.LocationText, '-'),
     latitude,
@@ -96,6 +163,7 @@ function mapFaultRow(row) {
     mapX: coordinateToPercent(longitude, 126.55, 127.35),
     mapY: 100 - coordinateToPercent(latitude, 37.15, 37.75),
     managerTodayCount: row.MangerCnt == null ? null : numberOrZero(row.MangerCnt),
+    totalCount: numberOrZero(row.TotalCount),
     actions: buildActions(row),
     raw: row,
   }
@@ -105,7 +173,6 @@ function mapFaultRow(row) {
  * 260808 silee - 고장 조치 항목 구성 함수
  */
 function buildActions(row) {
-  // 260808 silee - 기존 FaultMon 조치 문구가 있으면 우선 사용하고, 없으면 기본 확인 항목을 표시합니다.
   const actions = [row.FaultText, row.FaultAct1, row.FaultAct2, row.FaultAct3]
     .map((value) => text(value, ''))
     .filter(Boolean)
@@ -121,7 +188,6 @@ function buildActions(row) {
  * 260808 silee - FaultMon Stat 상태 변환 함수
  */
 function mapStatus(stat) {
-  // 260808 silee - 원본 FaultMon과 동일하게 Stat 값으로 접수/출동/수리/완료 상태를 판단합니다.
   const value = Number(stat)
 
   if (value === 0) {
@@ -198,7 +264,7 @@ function formatDateTime(value) {
 }
 
 /**
- * 260808 silee - 검색 input용 날짜/시간 포맷 함수
+ * 260808 silee - 검색 input 날짜/시간 포맷 함수
  */
 function formatDateTimeLocal(value) {
   if (!value) {

@@ -6,7 +6,7 @@ const statusOptions = [
 ]
 
 /**
- * 260808 silee - FaultMon 4줄 조회 조건 입력 폼 표시 함수
+ * 260808 silee - FaultMon 4줄 조회 조건 입력 폼 함수
  */
 export function SearchForm({ filters, isLoading, onChange, onSearch, onReset }) {
   return (
@@ -14,7 +14,7 @@ export function SearchForm({ filters, isLoading, onChange, onSearch, onReset }) 
       <header className="search-panel-header">
         <div>
           <h2>Fault Search</h2>
-          <p>통합 검색과 주요 조건으로 조회</p>
+          <p>누적 고장 이력 상세 조회</p>
         </div>
         <div className="search-action-buttons">
           <button className="search-submit-button" type="button" onClick={onSearch} disabled={isLoading}>
@@ -26,14 +26,14 @@ export function SearchForm({ filters, isLoading, onChange, onSearch, onReset }) 
         </div>
       </header>
 
-      {/* 260808 silee - 조건은 업무 조회 화면처럼 4줄로 고정해서 한눈에 보이게 둡니다. */}
+      {/* 260808 silee - 조건 영역은 업무 조회 화면처럼 4줄로 고정해서 한눈에 보이게 둡니다. */}
       <div className="condition-form">
         <ConditionInput
           className="condition-span-all"
           name="keyword"
           label="통합 검색"
           value={filters.keyword}
-          placeholder="차량, 고장명, 고장 내용, 접수, 담당, 위치"
+          placeholder="차량, 고장명, 고장 내용, 접수 번호, 담당, 위치"
           onChange={onChange}
         />
 
